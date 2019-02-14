@@ -1,0 +1,98 @@
+\documentclass{ctexart}
+\usepackage[margin=1in]{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage[colorlinks]{hyperref}
+
+\ctexset{
+  section/format = \Large\bfseries\raggedright
+}
+
+\lstset{
+  backgroundcolor = \color{lightgray!30},
+  keywordstyle = \color{blue},
+  stringstyle = \color{orange},
+  basicstyle = {\small\ttfamily},
+  commentstyle = {\color{brown}\itshape},
+  breaklines = true,
+  tabsize = 4,
+  gobble = 2,
+  numbers = left,
+  numberstyle = \tiny,
+  emph={
+    copy,call,IF,GOTO
+  },
+  emphstyle={\color{blue}\small\ttfamily}%
+}
+
+\title{简单记录一下我配置 MinGW 64 的过程}
+\author{啸行\thanks{\url{ranwang.osbert@outlook.com}}}
+
+\begin{document}
+  
+\maketitle
+
+\begin{abstract}
+  简单记录一下自己电脑上配置 MinGW 64 的过程，省的以后忘记。
+\end{abstract}
+
+\section{下载 MinGW 64}
+
+首先下载 \href{https://sourceforge.net/projects/mingw-w64/files/mingw-w64/}{MinGW 64}，选择 \texttt{x86\_64-posix-seh}。解压缩后，记录位置以备后续环境配置时使用。
+
+\section{编写 makefile 文件}
+
+我使用的 \texttt{makefile} 文件是通用的，默认生成 \texttt{main.exe}
+
+\begin{lstlisting}[language=make]
+  # 'wildcard' means all the C file in this folder
+  CFILE = $(wildcard *.c)
+  # 'patsubst' means turn all the C file in CFILE to the O files
+  OFILE = $(patsubst %.c,%.o,$(CFILE))
+  CC = gcc -std=c99
+  
+  # $@ -- target file; $^ -- all corresponding files; $< -- first corresponding files
+  main: $(OFILE)
+    $(CC) $^ -o $@
+  $(OFILE):%.o:%.c
+    $(CC) -c $< -o $@
+  
+  .PHONY: clean
+  clean:
+    del *.exe *.o
+\end{lstlisting}
+
+\section{配置环境变量的批处理文件}
+
+使用 \texttt{mingw.bat} 文件配置环境变量，其中 \texttt{MinGWPATH} 可以根据实际情况进行修改。
+
+\begin{lstlisting}[language = bash]
+  echo off
+  set MinGWPATH=D:\Program Files\mingw-w64\x86_64-8.1.0-posix-seh-rt_v6-rev0\mingw64\bin
+  set PATH=%MinGWPATH%;%PATH%
+  copy "..\makefile"
+  copy "..\make.bat"
+  call make
+  main.exe
+  "c:\windows\system32\cmd.exe"
+\end{lstlisting}
+
+\section{负责编译的批处理}
+
+编译文件依旧使用 \texttt{make.bat} 文件。
+
+\begin{lstlisting}[language = bash]
+  echo off
+  IF "%1"=="clean" GOTO clean
+  mingw32-make.exe
+  GOTO end
+  :clean
+  mingw32-make.exe clean
+  :end
+\end{lstlisting}
+
+\section{使用方法}
+
+建立一文件夹 \texttt{work\_c}。将以上两个批处理文件和 \texttt{makefile} 文件放入其中。以后每新建一个 C 语言工程，先将 \texttt{mingw.bat} 拷贝至工作目录，然后编写 C 文件，建议文件名与函数名一致。编写完毕，双击 \texttt{mingw.bat} 即可。
+
+\end{document}
