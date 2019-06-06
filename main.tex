@@ -50,16 +50,18 @@
   # 'patsubst' means turn all the C file in CFILE to the O files
   OFILE = $(patsubst %.c,%.o,$(CFILE))
   CC = gcc -std=c99
+  # default FILENAME is main
+  FILENAME ?= main
   
   # $@ -- target file; $^ -- all corresponding files; $< -- first corresponding files
-  main: $(OFILE)
-    $(CC) $^ -o $@
+  $(FILENAME): $(OFILE)
+  	$(CC) $^ -o $@
   $(OFILE):%.o:%.c
-    $(CC) -c $< -o $@
-  
+  	$(CC) -c $< -o $@
+   
   .PHONY: clean
   clean:
-    del *.exe *.o
+  	del *.exe *.o
 \end{lstlisting}
 
 \section{配置环境变量的批处理文件}
@@ -72,9 +74,14 @@
   set PATH=%MinGWPATH%;%PATH%
   copy "..\makefile"
   copy "..\make.bat"
-  call make
-  main.exe
-  "c:\windows\system32\cmd.exe"
+  call make %1
+  IF "%1"=="" GOTO default
+  IF "%1"=="clean" GOTO end
+  :default
+  %1.exe
+  GOTO end
+  :end
+  REM "c:\windows\system32\cmd.exe"
 \end{lstlisting}
 
 \section{负责编译的批处理}
@@ -83,9 +90,16 @@
 
 \begin{lstlisting}[language = bash]
   echo off
+  IF "%1"=="" GOTO default
   IF "%1"=="clean" GOTO clean
+  
+  mingw32-make.exe FILENAME=%1
+  GOTO end
+  
+  :default
   mingw32-make.exe
   GOTO end
+  
   :clean
   mingw32-make.exe clean
   :end
