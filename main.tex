@@ -25,93 +25,193 @@
   emphstyle={\color{blue}\small\ttfamily}%
 }
 
-\title{我配置 MinGW 64 的过程}
-\author{王然\thanks{\url{ranwang.osbert@outlook.com}}}
+\title{MinGW 64 配置和使用}
+%\author{王然\thanks{\url{ranwang.osbert@outlook.com}}}
+\date{}
 
 \begin{document}
   
 \maketitle
 
-\begin{abstract}
-  简单记录一下自己电脑上配置 MinGW 64 的过程，省的以后忘记。
-  实际上，目前我已经开始使用 WSL，而非 MinGW 64。
-\end{abstract}
-
 \section{下载 MinGW 64}
 
-首先下载 \href{https://sourceforge.net/projects/mingw-w64/files/mingw-w64/}{MinGW 64}，选择 \texttt{x86\_64-posix-seh}。解压缩后，记录位置以备后续环境配置时使用。
+下载 MinGW 64，我目前选择 \href{https://winlibs.com/#download-release}{WinLibs}。
+它免安装而且轻巧，适合我做临时的编程。
+这里提供的都是链接到 \href{https://github.com/brechtsanders/winlibs_mingw/releases/download/15.2.0posix-13.0.0-ucrt-r5/winlibs-x86_64-posix-seh-gcc-15.2.0-mingw-w64ucrt-13.0.0-r5.7z}{GitHub} 的压缩包，
+解压缩后，记录位置以备后续使用。
 
 \section{编写 makefile 文件}
 
-我使用的 \texttt{makefile} 文件是通用的，默认生成 \texttt{main.exe}
-
+我使用的 \texttt{makefile} 文件是通用的。
+在 Windows 系统默认生成 \texttt{main.exe}，
+非 Windows 系统默认生成 \texttt{main}
 \begin{lstlisting}[language=make]
-  # 'wildcard' means all the C file in this folder
-  CFILE = $(wildcard *.c)
-  # 'patsubst' means turn all the C file in CFILE to the O files
-  OFILE = $(patsubst %.c,%.o,$(CFILE))
-  CC = gcc -std=c99
-  # default FILENAME is main
-  FILENAME ?= main
+  # Compiler and flags
+  CC = gcc
+  CFLAGS = -Wall -Wextra -O2
+  LDFLAGS = -lm
   
-  # $@ -- target file; $^ -- all corresponding files; $< -- first corresponding files
-  $(FILENAME): $(OFILE)
-  	$(CC) $^ -o $@
-  $(OFILE):%.o:%.c
-  	$(CC) -c $< -o $@
-   
-  .PHONY: clean
+  # Target executable name
+  TARGET = main
+  
+  # Automatically find all .c files in current directory
+  SRCS = $(wildcard *.c)
+  
+  # Generate object file names from source files
+  OBJS = $(SRCS:.c=.o)
+  
+  # Header files (for dependency tracking)
+  HEADERS = $(wildcard *.h)
+  
+  # Detect operating system
+  ifeq ($(OS),Windows_NT)
+  # Windows
+  RM = del /Q /F
+  RMDIR = rmdir /S /Q
+  EXE_EXT = .exe
+  MKDIR = mkdir
+  PATH_SEP = \\
+  else
+  # Linux/Unix/macOS
+  RM = rm -f
+  RMDIR = rm -rf
+  EXE_EXT =
+  MKDIR = mkdir -p
+  PATH_SEP = /
+  endif
+  
+  # Add extension to target
+  TARGET_EXE = $(TARGET)$(EXE_EXT)
+  
+  # Default target
+  all: $(TARGET_EXE)
+  
+  # Link object files to create executable
+  $(TARGET_EXE): $(OBJS)
+  $(CC) -o $@ $^ $(LDFLAGS)
+  @echo Build complete: $(TARGET_EXE)
+  
+  # Compile .c files to .o files
+  %.o: %.c $(HEADERS)
+  $(CC) $(CFLAGS) -c $< -o $@
+  
+  # Clean up generated files
   clean:
-  	del *.exe *.o
+  ifeq ($(OS),Windows_NT)
+  @if exist *.o $(RM) *.o
+  @if exist $(TARGET_EXE) $(RM) $(TARGET_EXE)
+  @echo Clean complete
+  else
+  $(RM) $(OBJS) $(TARGET_EXE)
+  @echo Clean complete
+  endif
+  
+  # Clean and rebuild
+  rebuild: clean all
+  
+  # Run the program
+  run: $(TARGET_EXE)
+  .$(PATH_SEP)$(TARGET_EXE)
+  
+  # Run with custom input file
+  run-custom: $(TARGET_EXE)
+  .$(PATH_SEP)$(TARGET_EXE) $(FILE)
+  
+  # Show variables (for debugging Makefile)
+  show:
+  @echo "Operating System: $(OS)"
+  @echo "Sources: $(SRCS)"
+  @echo "Objects: $(OBJS)"
+  @echo "Headers: $(HEADERS)"
+  @echo "Target: $(TARGET_EXE)"
+  @echo "Remove command: $(RM)"
+  
+  # Phony targets (not actual files)
+  .PHONY: all clean rebuild run run-custom show help
+  
+  # Help message
+  help:
+  @echo Available targets:
+  @echo   make          - Build the project
+  @echo   make clean    - Remove generated files
+  @echo   make rebuild  - Clean and rebuild
+  @echo   make run      - Build and run with default input
+  @echo   make run-custom FILE=myfile.txt - Run with custom input file
+  @echo   make show     - Show Makefile variables
+  @echo   make help     - Show this help message
 \end{lstlisting}
 
 \section{配置环境变量的批处理文件}
 
-使用 \texttt{mingw.bat} 文件配置环境变量，其中 \texttt{MinGWPATH} 可以根据实际情况进行修改。
-
-\begin{lstlisting}[language = bash]
-  echo off
-  set MinGWPATH=D:\Program Files\mingw-w64\x86_64-8.1.0-posix-seh-rt_v6-rev0\mingw64\bin
-  set PATH=%MinGWPATH%;%PATH%
-  copy "..\makefile"
-  copy "..\make.bat"
-  call make %1
-  IF "%1"=="" GOTO default
-  IF "%1"=="clean" GOTO end
-  
-  %1.exe
-  GOTO end
-  
-  :default
-  main.exe
-  GOTO end
-  
-  :end
+下载 WinLibs 的压缩包后，
+内有 \texttt{mingwvars.bat} 做环境变量配置，
+内容如下
+\begin{lstlisting}[language = {command.com}]
+  @ECHO OFF
+  ECHO Setting up environment for using MinGW-w64 with GCC from %~dp0
+  SET PATH=%~dp0bin;%PATH%
+  SET CC=%~dp0bin/x86_64-w64-mingw32-gcc.exe
+  SET CXX=%~dp0bin/x86_64-w64-mingw32-g++.exe
+  SET FC=%~dp0bin/x86_64-w64-mingw32-gfortran.exe
+  SET F77=%~dp0bin/x86_64-w64-mingw32-gfortran.exe
+  SET LD=%~dp0bin/ld.exe
+  SET AR=%~dp0bin/x86_64-w64-mingw32-gcc-ar.exe
+  SET RANLIB=%~dp0bin/x86_64-w64-mingw32-gcc-ranlib.exe
+  SET WINDRES=%~dp0bin/windres.exe
+  SET RC=%~dp0bin/windres.exe
+  SET NM=%~dp0bin/x86_64-w64-mingw32-gcc-nm.exe
+  SET DLLTOOL=%~dp0bin/dlltool.exe
+  SET STRIP=%~dp0bin/strip.exe
+  SET PKG_CONFIG=%~dp0bin/pkgconf.exe
+  REM SET PKG_CONFIG_PATH=
+  REM To enable ccache remove REM from the next lines
+  REM SET CC=%~dp0bin/ccache.exe %CC%
+  REM SET CXX=%~dp0bin/ccache.exe %CXX%
 \end{lstlisting}
 
 \section{负责编译的批处理}
 
-编译文件依旧使用 \texttt{make.bat} 文件。
-
-\begin{lstlisting}[language = bash]
-  echo off
-  IF "%1"=="" GOTO default
-  IF "%1"=="clean" GOTO clean
+编译文件使用 \texttt{make.bat} 文件，
+据实修改 \texttt{mingwvars.bat} 所在路径，
+即 \texttt{MINGW\_ROOT}
+\begin{lstlisting}[language = {command.com}]
+  @echo off
+  setlocal
   
-  mingw32-make.exe FILENAME=%1
-  GOTO end
+  rem ===== Configuration =====
+  set MINGW_ROOT=C:\Documents\work-c\mingw64
+  set MINGW_VARS=%MINGW_ROOT%\mingwvars.bat
+  rem =========================
   
-  :default
-  mingw32-make.exe
-  GOTO end
+  rem Switch to project root (where make.bat is located)
+  pushd "%~dp0"
   
-  :clean
-  mingw32-make.exe clean
-  :end
+  rem Initialize MinGW environment only once
+  if not defined MINGW_ENV_INITIALIZED (
+  set MINGW_ENV_INITIALIZED=1
+  call "%MINGW_VARS%"
+  if errorlevel 1 (
+  echo [ERROR] Failed to call %MINGW_VARS%
+  popd
+  exit /b 1
+  )
+  )
+  
+  rem Run make
+  if "%~1"=="" (
+  mingw32-make.exe -f "%~dp0makefile"
+  ) else (
+  mingw32-make.exe -f "%~dp0makefile" %*
+  )
+  
+  set ERR=%ERRORLEVEL%
+  popd
+  exit /b %ERR%
 \end{lstlisting}
 
 \section{使用方法}
 
-建立一文件夹 \texttt{work\_c}。将以上两个批处理文件和 \texttt{makefile} 文件放入其中。以后每新建一个 C 语言工程，先将 \texttt{mingw.bat} 拷贝至工作目录，然后编写 C 文件，建议文件名与函数名一致。编写完毕，双击 \texttt{mingw.bat} 即可。
+在工程目录中创建如上的 \texttt{makefile} 和 \texttt{make.bat}，
+编写 C 文件，执行 \texttt{make.bat} 即可完成编译。
 
 \end{document}
